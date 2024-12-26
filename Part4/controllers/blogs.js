@@ -1,6 +1,6 @@
 const express = require('express');
 const Blog = require('../models/blog');
-const userExtractor = require('../middlewares/auth');
+const userExtractor = require('../middleware/auth');
 const blogsRouter = express.Router();
 
 blogsRouter.get('/', async (req, res) => {

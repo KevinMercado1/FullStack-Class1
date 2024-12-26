@@ -1,55 +1,77 @@
+process.env.NODE_ENV = 'test';
+process.env.SECRET = 'test-secret-key';
+
+const { test, expect } = require('@playwright/test');
 const supertest = require('supertest');
 const mongoose = require('mongoose');
 const app = require('../app');
 const Blog = require('../models/blog');
 const User = require('../models/User');
-const jwt = require('jsonwebtoken');
 
 const MONGODB_URI = process.env.MONGODB_URI;
 
-let token;
+test.describe('Blog API', () => {
+  let token;
 
-beforeAll(async () => {
-  if (mongoose.connection.readyState === 0) {
-    await mongoose.connect(MONGODB_URI);
-  }
+  test.beforeAll(async () => {
+    try {
+      console.log('Starting test setup...');
 
-  await User.deleteMany({ username: 'testuser' });
+      // Conectar a la base de datos si es necesario
+      if (mongoose.connection.readyState === 0) {
+        await mongoose.connect(MONGODB_URI);
+      }
 
-  const user = new User({
-    username: 'testuser',
-    passwordHash: 'hashedpassword',
+      // Limpiar colección de usuarios y crear un nuevo usuario
+      await User.deleteMany({});
+      console.log('Cleared existing users');
+
+      const newUser = {
+        username: 'testuser',
+        name: 'Test User',
+        password: 'testpass', // Contraseña en texto plano
+      };
+
+      console.log('Creating test user:', newUser.username);
+      const savedUser = await new User(newUser).save();
+      console.log('User created with id:', savedUser._id);
+
+      // Autenticarse para obtener el token
+      const loginResponse = await supertest(app).post('/api/login').send({
+        username: newUser.username,
+        password: newUser.password,
+      });
+
+      console.log('Login response status:', loginResponse.status);
+
+      if (!loginResponse.body.token) {
+        throw new Error('Failed to obtain authentication token');
+      }
+
+      token = loginResponse.body.token;
+      console.log('Successfully obtained token:', token);
+    } catch (error) {
+      console.error('Error during test setup:', error);
+      throw error;
+    }
   });
 
-  await user.save();
-
-  const userForToken = {
-    username: 'testuser',
-    id: user._id,
-  };
-
-  token = jwt.sign(userForToken, process.env.SECRET);
-});
-
-beforeEach(async () => {
-  await Blog.deleteMany({});
-
-  const initialBlog = new Blog({
-    title: 'Initial Blog',
-    author: 'Initial Author',
-    url: 'http://initialblog.com',
-    likes: 0,
+  test.afterAll(async () => {
+    console.log('Cleaning up after tests...');
+    await mongoose.connection.close();
   });
-  await initialBlog.save();
-});
 
-afterAll(async () => {
-  await mongoose.connection.close();
-});
+  test.beforeEach(async () => {
+    await Blog.deleteMany({});
+    const initialBlog = new Blog({
+      title: 'Initial Blog',
+      author: 'Initial Author',
+      url: 'http://initialblog.com',
+      likes: 0,
+    });
+    await initialBlog.save();
+  });
 
-jest.setTimeout(10000);
-
-describe('Blog API', () => {
   test('GET /api/blogs returns correct amount of blog posts', async () => {
     const response = await supertest(app).get('/api/blogs');
     expect(response.status).toBe(200);
@@ -64,13 +86,14 @@ describe('Blog API', () => {
       likes: 5,
     };
 
-    await supertest(app)
+    const response = await supertest(app)
       .post('/api/blogs')
       .set('Authorization', `Bearer ${token}`)
-      .send(newBlog)
-      .expect(201);
+      .send(newBlog);
 
-    const response = await supertest(app).get('/api/blogs');
-    expect(response.body).toHaveLength(2);
+    expect(response.status).toBe(201);
+
+    const allBlogs = await supertest(app).get('/api/blogs');
+    expect(allBlogs.body).toHaveLength(2);
   });
 });

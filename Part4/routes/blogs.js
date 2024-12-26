@@ -5,10 +5,16 @@ const blogsRouter = express.Router();
 
 // Obtener todos los blogs
 blogsRouter.get('/', async (req, res) => {
-  const blogs = await Blog.find({});
-  res.json(blogs);
+  try {
+    const blogs = await Blog.find({});
+    res.json(blogs);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error fetching blogs' });
+  }
 });
 
+// Crear un nuevo blog
 blogsRouter.post(
   '/',
   middleware.tokenExtractor,
@@ -16,6 +22,11 @@ blogsRouter.post(
   async (req, res) => {
     const { title, author, url, likes } = req.body;
     const user = req.user;
+
+    // Validación de campos
+    if (!title || !url) {
+      return res.status(400).json({ error: 'Title and URL are required' });
+    }
 
     const blog = new Blog({
       title,
@@ -28,15 +39,17 @@ blogsRouter.post(
     try {
       const savedBlog = await blog.save();
 
+      // Asegurarse de que el usuario tiene un array de blogs
       if (!user.blogs) {
         user.blogs = [];
       }
-
       user.blogs = user.blogs.concat(savedBlog._id);
       await user.save();
 
-      // Responder con el blog recién creado
-      res.status(201).json(savedBlog);
+      res.status(201).json({
+        message: 'Blog created successfully',
+        blog: savedBlog,
+      });
     } catch (error) {
       console.error(error);
       res
@@ -46,12 +59,17 @@ blogsRouter.post(
   }
 );
 
+// Eliminar un blog
 blogsRouter.delete(
   '/:id',
   middleware.tokenExtractor,
   middleware.userExtractor,
   async (req, res) => {
     const blog = await Blog.findById(req.params.id);
+
+    if (!blog) {
+      return res.status(404).json({ error: 'Blog not found' });
+    }
 
     if (blog.user.toString() !== req.user._id.toString()) {
       return res
@@ -61,7 +79,7 @@ blogsRouter.delete(
 
     try {
       await Blog.findByIdAndRemove(req.params.id);
-      res.status(204).end();
+      res.status(204).json({ message: 'Blog deleted successfully' });
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: 'Error deleting the blog' });
