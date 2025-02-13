@@ -10,7 +10,7 @@ export default [
       sourceType: 'commonjs',
       globals: {
         ...globals.node,
-        ...globals.jest, // Add Jest globals here
+        ...globals.jest,
       },
       ecmaVersion: 'latest',
     },

@@ -1,0 +1,18 @@
+GET http://localhost:3001/api/diagnoses
+
+###
+
+GET http://localhost:3001/api/patients
+
+###
+
+POST http://localhost:3001/api/patients/12345/entries
+Content-Type: application/json
+
+{
+  "type": "HealthCheck",
+  "date": "2025-02-10",
+  "specialist": "Dr. Smith",
+  "description": "Routine check-up",
+  "healthCheckRating": 1
+}
